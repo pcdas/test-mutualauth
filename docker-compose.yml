@@ -1,0 +1,56 @@
+version: "2"
+
+networks:
+    default:
+        ipam:
+            config:
+                - subnet: 10.29.0.0/16
+                  ip_range: 10.29.6.0/24
+
+services:
+    # INFRASTRUCTURE
+    haproxy0:
+        image: haproxy:1.6
+        ports:
+            - "80:80"
+            - "443:443"
+            - "1933:1933"
+        networks:
+            default:
+                ipv4_address: 10.29.6.1
+        volumes:
+            - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+        depends_on:
+            - syslog-collector
+
+    syslog-collector:
+        image: balabit/syslog-ng:3.7
+        networks:
+            default:
+                ipv4_address: 10.29.6.2
+        volumes:
+            - ./haproxy/syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf:ro
+
+    mutualauth-myserviceA01:
+        image: icsdev/java
+        networks:
+            default:
+                ipv4_address: 10.29.6.3
+        volumes:
+            - /Users:/Users
+        container_name: mutualauth.MyserviceA01
+        hostname: myserviceA01.mycloud.io
+        command: [ java, "-jar", "-DSOURCE_LOC=${SOURCE_LOC}", "-DSERVICE_NAME=myserviceA01.mycloud.io", "$PWD/build/libs/test-mutualauth-0.0.1-SNAPSHOT.war" ]
+
+    mutualauth-myserviceA02:
+        image: icsdev/java
+        networks:
+            default:
+                ipv4_address: 10.29.6.4
+        volumes:
+            - /Users:/Users
+        container_name: mutualauth.MyserviceA02
+        hostname: myserviceA02.mycloud.io
+        command: [ java, "-jar", "-DSOURCE_LOC=${SOURCE_LOC}", "-DSERVICE_NAME=myserviceA02.mycloud.io", "$PWD/build/libs/test-mutualauth-0.0.1-SNAPSHOT.war" ]
+
+

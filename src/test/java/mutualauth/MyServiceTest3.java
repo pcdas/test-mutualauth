@@ -9,6 +9,10 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateParsingException;
+import java.security.cert.X509Certificate;
+import java.util.Collection;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -105,19 +109,28 @@ public class MyServiceTest3 {
 	private boolean verifyHost(String hostname, javax.net.ssl.SSLSession sess) {
 		try {
 			if (logger.isDebugEnabled()) {
-				Certificate[] certs = sess.getPeerCertificates();
+	            Certificate[] certs = sess.getPeerCertificates();
 				String cert = String.format("verifyHost certificate (index=%d, total=%d): type=%s [%s]",
 						0, certs.length, certs[0].getType(), certs[0]);
-				logger.info(cert);
+				logger.debug(cert);
 				String s = String.format("verifyHost hostname=%s, peerHost=%s, peerPort=%d",
 						hostname, sess.getPeerHost(), sess.getPeerPort());
-				logger.info(s);
+				logger.debug(s);
 			}
-			return hostname.equalsIgnoreCase(extractCommonName(sess.getPeerPrincipal().toString())) || true;
-		} catch (SSLPeerUnverifiedException e) {
+
+			boolean matched = hostname.equalsIgnoreCase(
+			        extractCommonName(sess.getPeerPrincipal().toString()));
+			if (!matched) {
+	            Certificate[] certs = sess.getPeerCertificates();
+	            String altName = extractAltDNSname((X509Certificate)certs[0]);
+	            matched = hostname.equalsIgnoreCase(altName);
+			}
+			return matched;
+
+		} catch (SSLPeerUnverifiedException | CertificateParsingException | ClassCastException e) {
 			logger.info("Hostname verification failed.", e);
 			return false;
-		}
+        }
 	}
 
 	private String extractCommonName(String certPrincipal) {
@@ -126,4 +139,21 @@ public class MyServiceTest3 {
 		return m.find() ? m.group(1) : "";
 	}
 
+	private String extractAltDNSname(X509Certificate x509cert) throws CertificateParsingException {
+	    String altDNS = null;
+        final int DNS_NAME_TYPE = 2;
+        Collection<List<?>> coll = x509cert.getSubjectAlternativeNames();
+        if (coll != null) {
+            for (List<?> l: coll) {
+                int nameType = (Integer)l.get(0);
+                if (nameType == DNS_NAME_TYPE) {
+                    altDNS = (String)l.get(1);
+                    break;
+                }
+            }
+        }
+        if (logger.isDebugEnabled())
+            logger.debug("Extracted alternative DNS name:[" + altDNS + "]");
+	    return altDNS;
+	}
 }
